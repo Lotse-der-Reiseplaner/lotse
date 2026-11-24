@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lotse – der Reiseplaner, der mitdenkt</title>
+
+<!-- Web-App: eigenes Symbol am Home-Bildschirm, ohne Browserleiste -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1a73e8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Lotse">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:Roboto,Arial,sans-serif;color:#202124;background:#e8eaed}
+#app{position:relative;height:100vh;height:100dvh;min-height:480px;overflow:hidden}
+#map{position:absolute;inset:0}
+
+/* Marker */
+.pinw{position:relative;width:30px;height:36px;cursor:pointer;transform-origin:50% 100%;transition:transform .15s,opacity .15s}
+.pinw .pin{position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--c);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);display:grid;place-items:center}
+.pinw .pin span{transform:rotate(45deg);font-size:14px;line-height:1;color:#fff;font-weight:700}
+.pinw.sel{transform:scale(1.3)}
+.pinw.faded{opacity:.3}
+
+/* Seitenleiste */
+#panel{position:absolute;top:12px;left:12px;bottom:12px;width:360px;max-width:calc(100% - 24px);background:#fff;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden;z-index:5}
+#grab{display:none}
+.trip-head{padding:16px 18px 10px}
+.brand{font-size:12px;font-weight:700;letter-spacing:.08em;color:#1a73e8;text-transform:uppercase;margin-bottom:6px}
+.brand span{font-weight:400;letter-spacing:0;text-transform:none;color:#5f6368}
+.trip-head h1{font-size:20px;font-weight:500;margin:0 0 4px}
+.trip-head p{margin:0;font-size:13px;color:#5f6368}
+.stats{display:flex;gap:8px;padding:0 18px 12px;flex-wrap:wrap}
+.stat{background:#e8f0fe;color:#174ea6;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:500}
+.tabs{display:flex;gap:4px;padding:0 12px;border-bottom:1px solid #e0e0e0;overflow-x:auto;scrollbar-width:none;flex:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:0;background:none;padding:10px 10px 9px;font:500 13px Roboto,Arial;color:#5f6368;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+.tab.on{color:#1a73e8;border-bottom-color:#1a73e8}
+#list{flex:1;overflow-y:auto;padding:6px 0 12px;-webkit-overflow-scrolling:touch}
+.day-sum{margin:10px 18px 6px;font-size:13px;color:#3c4043;line-height:1.45}
+.day-sum b{font-weight:500}
+.day-sum .drv{color:#1a73e8}
+.item{display:flex;gap:12px;padding:9px 18px;cursor:pointer;align-items:flex-start}
+.item:hover{background:#f1f3f4}
+.item.sel{background:#e8f0fe}
+.dot{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:14px;margin-top:1px}
+.item .t{font-size:14px;font-weight:500}
+.item .s{font-size:12px;color:#5f6368;margin-top:2px;line-height:1.35}
+.leg{display:flex;align-items:center;gap:10px;padding:2px 18px 2px 31px;font-size:12px;color:#5f6368}
+.leg:before{content:"";width:2px;height:18px;background:repeating-linear-gradient(#1a73e8 0 4px,transparent 4px 7px)}
+.badge{display:inline-block;font-size:11px;font-weight:500;padding:1px 6px;border-radius:4px;margin-left:6px;vertical-align:1px}
+.free{background:#e6f4ea;color:#137333}
+.cheap{background:#fef7e0;color:#b06000}
+.warn{background:#fce8e6;color:#c5221f}
+#msg{display:none;margin:8px 12px 0;padding:8px 10px;border-radius:8px;background:#fef7e0;color:#7a4a00;font-size:12px;line-height:1.4}
+.foot{font-size:11px;color:#80868b;padding:8px 18px 12px;border-top:1px solid #eee;line-height:1.4;flex:none}
+
+/* Filter-Chips */
+#chips{position:absolute;top:18px;left:384px;right:70px;display:flex;gap:8px;flex-wrap:wrap;z-index:4}
+.chip{display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:16px;background:#fff;border:0;box-shadow:0 1px 3px rgba(0,0,0,.3);font:500 13px Roboto,Arial;color:#3c4043;cursor:pointer;white-space:nowrap}
+.chip .c{width:10px;height:10px;border-radius:50%}
+.chip.off{background:#f1f3f4;color:#9aa0a6;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.chip.off .c{opacity:.35}
+
+/* Kartenknöpfe */
+#ctrl{position:absolute;right:14px;bottom:28px;display:flex;flex-direction:column;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.3);z-index:4;overflow:hidden}
+#ctrl button{width:40px;height:40px;border:0;background:#fff;font-size:22px;color:#5f6368;cursor:pointer}
+#ctrl button+button{border-top:1px solid #e8e8e8}
+#ctrl button:hover{background:#f1f3f4}
+
+/* Infokarte */
+#card{position:absolute;right:14px;top:64px;width:300px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.3);z-index:6;display:none;overflow:hidden}
+#card .hd{padding:14px 44px 10px 16px;color:#fff}
+#card .hd .k{font-size:12px;opacity:.9}
+#card .hd .n{font-size:18px;font-weight:500;margin-top:2px}
+#card .bd{padding:12px 16px 14px;font-size:13px;color:#3c4043;line-height:1.5}
+#card .row{display:flex;gap:8px;margin-bottom:6px}
+#card .row span:first-child{color:#80868b;min-width:74px}
+#card .x{position:absolute;right:8px;top:8px;border:0;background:rgba(255,255,255,.25);color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px}
+#card .acts{display:flex;gap:8px;margin-top:10px}
+#card .acts button{flex:1;height:34px;border-radius:17px;border:1px solid #dadce0;background:#fff;font:500 13px Roboto,Arial;color:#1a73e8;cursor:pointer}
+#card .acts button:first-child{background:#1a73e8;color:#fff;border-color:#1a73e8}
+
+#toast{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);background:#323232;color:#fff;font-size:13px;padding:10px 16px;border-radius:6px;z-index:9;display:none;max-width:80%;line-height:1.4}
+
+/* Hinweis, solange kein Schlüssel eingetragen ist */
+#setup{position:absolute;inset:0;display:none;place-items:center;z-index:3;padding:20px}
+#setup div{max-width:420px;background:#fff;border-radius:12px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,.2);font-size:14px;line-height:1.5}
+
+@media (max-width:760px){
+  #panel{top:auto;height:46%;left:8px;right:8px;width:auto;bottom:calc(8px + env(safe-area-inset-bottom));max-width:none;transition:height .2s}
+  #panel.min{height:118px}
+  #grab{display:block;flex:none;height:18px;cursor:pointer;position:relative}
+  #grab:after{content:"";position:absolute;left:50%;top:7px;width:36px;height:4px;margin-left:-18px;border-radius:2px;background:#dadce0}
+  .trip-head{padding:2px 18px 8px;cursor:pointer}
+  .trip-head h1{font-size:17px}
+  .stats{display:none}
+  #chips{left:8px;right:8px;top:calc(8px + env(safe-area-inset-top));flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:4px}
+  #chips::-webkit-scrollbar{display:none}
+  #card{left:8px;right:8px;width:auto;top:calc(52px + env(safe-area-inset-top))}
+  #ctrl{bottom:auto;top:calc(56px + env(safe-area-inset-top));right:8px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+  <div id="setup"><div></div></div>
+  <div id="chips"></div>
+
+  <div id="panel">
+    <div id="grab" aria-label="Liste ein- oder ausklappen"></div>
+    <div class="trip-head" id="head">
+      <div class="brand">Lotse <span>· der Reiseplaner, der mitdenkt</span></div>
+      <h1>Andalusien &amp; Algarve</h1>
+      <p>Mitte Mai 2027 · 7 Tage · Mietauto ab Sevilla</p>
+    </div>
+    <div class="stats" id="stats">
+      <span class="stat" id="stat-drive">Fahrzeit wird berechnet …</span>
+      <span class="stat">3 Länder</span>
+      <span class="stat">1 Zeitzonenwechsel</span>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div id="msg"></div>
+    <div id="list"></div>
+    <div class="foot">Prototyp. Straßenrouten von Google, ohne Live-Verkehr. Parkangaben teils aus Community-Quellen, vor der Reise prüfen.</div>
+  </div>
+
+  <div id="card"></div>
+  <div id="ctrl">
+    <button id="zin" aria-label="Vergrößern">+</button>
+    <button id="zout" aria-label="Verkleinern">−</button>
+    <button id="zfit" aria-label="Ganze Route" style="font-size:17px">⤢</button>
+  </div>
+  <div id="toast"></div>
+</div>
+
+<script>
+/* =========================================================
+   1) HIER DEN EIGENEN GOOGLE-MAPS-SCHLÜSSEL EINTRAGEN
+   (zwischen die Anführungszeichen, nicht im Chat schicken)
+   ========================================================= */
+const API_KEY = "DEIN_SCHLUESSEL";
+
+
+/* =========================================================
+   2) Testdaten Andalusien & Algarve (Stand 18.11.2026)
+   ========================================================= */
+const CAT = {
+  kultur:{name:"Kultur & Stadt",  color:"#a142f4", icon:"🏛"},
+  natur: {name:"Natur & Aussicht",color:"#188038", icon:"⛰"},
+  strand:{name:"Strand",          color:"#00a3c4", icon:"🏖"},
+  essen: {name:"Essen",           color:"#e8710a", icon:"🍴"},
+  bett:  {name:"Übernachtung",    color:"#d93025", icon:"🛏"},
+  park:  {name:"Parken",          color:"#1a73e8", icon:"P"},
+  grenze:{name:"Grenze",          color:"#5f6368", icon:"⇄"}
+};
+
+const PLACES = [
+  {id:"sev", name:"Sevilla", cat:"bett", lat:37.3890, lng:-5.9840, days:[1,6,7], note:"Übernachtung Tag 1 und Tag 6. Unterkunft noch nicht gebucht."},
+  {id:"kat", name:"Kathedrale & Giralda", cat:"kultur", lat:37.3858, lng:-5.9931, days:[1], note:"Altstadt-Rundgang Tag 1"},
+  {id:"alc", name:"Real Alcázar", cat:"kultur", lat:37.3831, lng:-5.9903, days:[1], note:"Tickets vorab buchen"},
+  {id:"sc",  name:"Barrio Santa Cruz", cat:"kultur", lat:37.3862, lng:-5.9884, days:[1,6], note:"Altes Judenviertel, Gassen und Plätze"},
+  {id:"sag", name:"Fortaleza de Sagres", cat:"kultur", lat:36.9980, lng:-8.9480, days:[2], note:"Festung auf der Landzunge"},
+  {id:"bel", name:"Praia do Beliche", cat:"strand", lat:37.0275, lng:-8.9686, days:[2], note:"Wilder Strand, Stufen hinunter"},
+  {id:"cabo",name:"Cabo de São Vicente", cat:"natur", lat:37.0230, lng:-8.9966, days:[2], note:"Leuchtturm am Südwestende Europas, Klippen, Sonnenuntergang"},
+  {id:"tav", name:"Tavira", cat:"bett", lat:37.1273, lng:-7.6506, days:[2], note:"Übernachtung Tag 2. Altstadt, Römerbrücke, Flussmündung"},
+  {id:"gr1", name:"Grenze Portugal → Spanien", cat:"grenze", lat:37.2030, lng:-7.4210, days:[3], note:"Guadiana-Brücke. Uhr eine Stunde vor!"},
+  {id:"cad", name:"Cádiz Altstadt", cat:"kultur", lat:36.5300, lng:-6.2930, days:[3], note:"Kathedrale, Torre Tavira, Promenade. Mittagessen hier."},
+  {id:"mer", name:"Mercado Central de Cádiz", cat:"essen", lat:36.5332, lng:-6.2955, days:[3], note:"Markthalle mit Tapas-Ständen"},
+  {id:"vej", name:"Vejer de la Frontera", cat:"kultur", lat:36.2520, lng:-5.9666, days:[3], note:"Weißes Bergdorf mit Aussicht"},
+  {id:"zah", name:"Zahara de los Atunes", cat:"bett", lat:36.1364, lng:-5.8456, days:[3], note:"Übernachtung Tag 3. Fischerort."},
+  {id:"zahe",name:"Thunfisch in Zahara", cat:"essen", lat:36.1384, lng:-5.8436, days:[3], note:"Almadraba-Thunfisch probieren (Lokal noch offen)"},
+  {id:"bae", name:"Baelo Claudia", cat:"kultur", lat:36.0900, lng:-5.7740, days:[4], note:"Römische Ruinen am Strand"},
+  {id:"bol", name:"Playa de Bolonia", cat:"strand", lat:36.0850, lng:-5.7790, days:[4], note:"Riesige Wanderdüne direkt am Strand"},
+  {id:"tar", name:"Tarifa", cat:"natur", lat:36.0143, lng:-5.6044, days:[4], note:"Südlichster Punkt Festlandeuropas, Blick nach Marokko"},
+  {id:"lin", name:"La Línea de la Concepción", cat:"bett", lat:36.1610, lng:-5.3480, days:[4,5], note:"Übernachtung Tag 4 und 5, Basis für Gibraltar"},
+  {id:"gr2", name:"Grenze Gibraltar (zu Fuß)", cat:"grenze", lat:36.1510, lng:-5.3470, days:[5], note:"Über die Landebahn des Flughafens. Ausweis mitnehmen."},
+  {id:"rock",name:"Upper Rock & Affen", cat:"natur", lat:36.1300, lng:-5.3500, days:[5], note:"Seilbahn bis 2027 zu, Minibusse fahren hinauf. Halber Tag reicht."},
+  // Parken
+  {id:"p1", name:"Paseo de las Delicias", cat:"park", lat:37.3696, lng:-5.9877, days:[1,6], note:"Wenige Plätze, nahe Plaza de España", cost:"gratis", cls:"free"},
+  {id:"p2", name:"Parkplatz Fortaleza", cat:"park", lat:37.0015, lng:-8.9455, days:[2], note:"Großer Platz vor der Festung", cost:"gratis", cls:"free"},
+  {id:"p3", name:"Parkplatz Cabo de São Vicente", cat:"park", lat:37.0237, lng:-8.9950, days:[2], note:"Nur tagsüber", cost:"gratis", cls:"free"},
+  {id:"p4", name:"Am Fluss (Tavira)", cat:"park", lat:37.1225, lng:-7.6480, days:[2], note:"Zwischen Eisenbahn- und alter Brücke, kurz zur Altstadt (Lage ca.)", cost:"gratis", cls:"free"},
+  {id:"p10",name:"Cádiz: Umweltzone", cat:"park", lat:36.5240, lng:-6.2880, days:[3], note:"Seit 2026 Umweltzone mit Kameras, Mietauto-Plakette prüfen. Gratis in der Altstadt kaum möglich; Garagen der Zona Franca ab ca. 1,40 €/h", cost:"Achtung", cls:"warn"},
+  {id:"p5", name:"Avenida Andalucía (Vejer)", cat:"park", lat:36.2517, lng:-5.9691, days:[3], note:"24 Plätze, wenige Minuten ins Dorf", cost:"gratis", cls:"free"},
+  {id:"p6", name:"Parkplatz Baelo Claudia", cat:"park", lat:36.0899, lng:-5.7712, days:[4], note:"Nur zu Museumszeiten offen", cost:"gratis", cls:"free"},
+  {id:"p7", name:"Beim alten Fort (Tarifa)", cat:"park", lat:36.0111, lng:-5.6077, days:[4], note:"Nahe Hafen und Altstadt (Forumstipp)", cost:"gratis", cls:"free"},
+  {id:"p8", name:"Av. Príncipe de Asturias", cat:"park", lat:36.1553, lng:-5.3406, days:[4,5], note:"5 Min. zur Grenze. Schilder beachten, teils Parkverbot 7–15 Uhr", cost:"gratis", cls:"free"},
+  {id:"p9", name:"Alcaidesa Marina", cat:"park", lat:36.1555, lng:-5.3544, days:[4,5], note:"Tiefgarage", cost:"≈ 10 €/Tag", cls:"cheap"}
+];
+const P = Object.fromEntries(PLACES.map(p=>[p.id,p]));
+
+// Tage; "stops" = Reihenfolge, nach der Google die Straßenroute berechnet
+const DAYS = [
+  {n:1, label:"Tag 1", title:"Ankunft Sevilla", sum:"Ankommen, Altstadt erkunden: Kathedrale, Real Alcázar, Barrio Santa Cruz."},
+  {n:2, label:"Tag 2", title:"Sevilla → Sagres → Tavira", mode:"DRIVE", stops:["sev","sag","bel","cabo","tav"],
+     sum:"Algarve-Tag: Sagres, Praia do Beliche, Cabo de São Vicente. Am späten Nachmittag nach Tavira."},
+  {n:3, label:"Tag 3", title:"Tavira → Cádiz → Vejer → Zahara", mode:"DRIVE", stops:["tav","gr1","cad","vej","zah"],
+     sum:"Über die Grenze (Uhr +1 h), Cádiz mit Mittagessen, Stopp in Vejer, Übernachtung in Zahara."},
+  {n:4, label:"Tag 4", title:"Bolonia → Tarifa → La Línea", mode:"DRIVE", stops:["zah","bae","tar","lin"],
+     sum:"Vormittag Strand und Ruinen in Bolonia, Stopp in Tarifa, weiter nach La Línea."},
+  {n:5, label:"Tag 5", title:"Gibraltar zu Fuß", mode:"WALK", stops:["lin","gr2","rock"],
+     sum:"Auto in La Línea lassen, zu Fuß über die Grenze. Felsen, Affen, Stadt. Nachmittags Strand."},
+  {n:6, label:"Tag 6", title:"La Línea → Sevilla", mode:"DRIVE", stops:["lin","sev"],
+     sum:"Zurück nach Sevilla, Nachmittag und Abend in der Stadt."},
+  {n:7, label:"Tag 7", title:"Sevilla & Rückflug", sum:"Letzter Vormittag in Sevilla, dann Rückflug."}
+];
+
+
+/* =========================================================
+   3) Zustand und Hilfsfunktionen
+   ========================================================= */
+let map, curDay = 0, selId = null;
+const catOn = Object.fromEntries(Object.keys(CAT).map(k=>[k,true]));
+const markers = {};          // id -> {marker, el}
+const lines = {};            // Tag -> {casing, line, pts, walk}
+const routeInfo = {};        // Tag -> {m, s, legs[]} von Google
+const $ = id => document.getElementById(id);
+const mobile = () => innerWidth <= 760;
+
+function fmtDur(s){ const h=Math.floor(s/3600), m=Math.round((s%3600)/60); return h? `${h} h ${m?m+" min":""}`.trim() : `${m} min`; }
+function fmtKm(m){ return m>=10000? Math.round(m/1000)+" km" : (m/1000).toFixed(1).replace(".",",")+" km"; }
+let tt; function toast(t){ const e=$("toast"); e.textContent=t; e.style.display="block"; clearTimeout(tt); tt=setTimeout(()=>e.style.display="none",4000); }
+function msg(t){ const e=$("msg"); e.innerHTML=t; e.style.display=t?"block":"none"; }
+
+// Kartenbereich, der nicht von Liste/Chips verdeckt ist
+function pad(){
+  if(mobile()) return {top:70, left:20, right:56, bottom:$("panel").offsetHeight+24};
+  return {top:70, left:396, right:70, bottom:40};
+}
+function fitTo(pts){
+  if(!pts.length) return;
+  const b = new google.maps.LatLngBounds();
+  pts.forEach(p=>b.extend(p));
+  if(pts.length===1){ const p=pts[0]; b.extend({lat:p.lat+0.006,lng:p.lng+0.008}); b.extend({lat:p.lat-0.006,lng:p.lng-0.008}); }
+  map.fitBounds(b, pad());
+}
+function allPts(){ return PLACES.map(p=>({lat:p.lat,lng:p.lng})); }
+function dayPts(n){
+  const l=lines[n];
+  if(l && l.pts.length) return l.pts;
+  return PLACES.filter(p=>p.days.includes(n)).map(p=>({lat:p.lat,lng:p.lng}));
+}
+
+
+/* =========================================================
+   4) Google Maps laden (offizieller Lade-Baustein)
+   ========================================================= */
+(g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({key: API_KEY, v: "weekly", language: "de", region: "ES"});
+
+// Google ruft das auf, wenn der Schlüssel abgelehnt wird
+window.gm_authFailure = () => {
+  msg("<b>Google hat den Schlüssel abgelehnt.</b> Prüfen: Ist der Schlüssel richtig eingetragen, die Maps JavaScript API freigeschaltet und die Website-Beschränkung auf diese Adresse gesetzt?");
+};
+
+
+/* =========================================================
+   5) Karte, Marker, Routen
+   ========================================================= */
+async function init(){
+  if(!API_KEY || API_KEY==="DEIN_SCHLUESSEL"){
+    $("setup").style.display="grid";
+    $("setup").firstElementChild.innerHTML = "<b>Noch kein Google-Maps-Schlüssel eingetragen.</b><br>Öffne <code>index.html</code>, suche oben im Skript <code>DEIN_SCHLUESSEL</code> und ersetze es durch deinen Schlüssel. Dann die Datei neu hochladen.";
+    renderTabs(); renderList();
+    return;
+  }
+
+  const { Map } = await google.maps.importLibrary("maps");
+  const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+  await google.maps.importLibrary("geometry");
+
+  map = new Map($("map"), {
+    center:{lat:36.75, lng:-7.0}, zoom:7,
+    mapId:"DEMO_MAP_ID",          // nötig für die modernen Marker
+    disableDefaultUI:true, gestureHandling:"greedy", clickableIcons:false
+  });
+  map.addListener("click", ()=>{ selId=null; hideCard(); refresh(); });
+
+  // Marker
+  PLACES.forEach(p=>{
+    const c=CAT[p.cat];
+    const el=document.createElement("div");
+    el.className="pinw"; el.style.setProperty("--c",c.color);
+    el.innerHTML=`<div class="pin"><span>${c.icon}</span></div>`;
+    el.title=p.name;
+    const marker = new AdvancedMarkerElement({map, position:{lat:p.lat,lng:p.lng}, content:el, title:p.name});
+    marker.addListener("click", ()=>select(p.id,true));
+    markers[p.id]={marker,el};
+  });
+
+  fitTo(allPts());
+  renderTabs(); renderList(); refresh();
+  loadRoutes();
+}
+
+// Straßenroute je Tag über die Routes API; Ergebnis wird im Browser gemerkt (spart Kontingent)
+async function fetchRoute(day){
+  const ck = `lotse:route:v1:${day.n}:${day.mode}:${day.stops.join(",")}`;
+  try{ const c=localStorage.getItem(ck); if(c) return JSON.parse(c); }catch(e){}
+
+  const ll = id => ({location:{latLng:{latitude:P[id].lat, longitude:P[id].lng}}});
+  const body = {
+    origin: ll(day.stops[0]),
+    destination: ll(day.stops[day.stops.length-1]),
+    intermediates: day.stops.slice(1,-1).map(ll),
+    travelMode: day.mode, languageCode:"de", units:"METRIC"
+  };
+  if(day.mode==="DRIVE") body.routingPreference="TRAFFIC_UNAWARE";
+
+  const r = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "X-Goog-Api-Key":API_KEY,
+      "X-Goog-FieldMask":"routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,routes.legs.distanceMeters,routes.legs.duration"
+    },
+    body:JSON.stringify(body)
+  });
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok || !j.routes || !j.routes.length) throw new Error((j.error && j.error.message) || `Keine Route gefunden (Status ${r.status})`);
+  const rt=j.routes[0];
+  const out = {
+    enc: rt.polyline.encodedPolyline,
+    m: rt.distanceMeters||0,
+    s: parseInt(rt.duration||"0"),
+    legs: (rt.legs||[]).map(l=>({m:l.distanceMeters||0, s:parseInt(l.duration||"0")}))
+  };
+  try{ localStorage.setItem(ck, JSON.stringify(out)); }catch(e){}
+  return out;
+}
+
+function drawLine(n, pts, walk, straight){
+  const casing = new google.maps.Polyline({map, path:pts, strokeColor:"#ffffff", strokeOpacity:walk?0:1, strokeWeight:8, zIndex:1, clickable:false});
+  const opts = {map, path:pts, strokeColor:"#1a73e8", strokeOpacity:1, strokeWeight:5, zIndex:2, clickable:false};
+  if(walk || straight){
+    opts.strokeOpacity=0;
+    opts.icons=[{icon: walk
+        ? {path:google.maps.SymbolPath.CIRCLE, scale:2.5, fillOpacity:1, fillColor:"#1a73e8", strokeColor:"#1a73e8", strokeOpacity:1}
+        : {path:"M 0,-1 0,1", strokeOpacity:1, strokeColor:"#1a73e8", scale:3},
+      offset:"0", repeat: walk? "10px":"14px"}];
+  }
+  lines[n] = {casing, line:new google.maps.Polyline(opts), pts, walk:walk||straight};
+}
+
+async function loadRoutes(){
+  const errors=[];
+  await Promise.all(DAYS.filter(d=>d.stops).map(async d=>{
+    try{
+      const r = await fetchRoute(d);
+      routeInfo[d.n]=r;
+      const pts = google.maps.geometry.encoding.decodePath(r.enc).map(x=>({lat:x.lat(),lng:x.lng()}));
+      drawLine(d.n, pts, d.mode==="WALK", false);
+    }catch(e){
+      console.error("Route Tag "+d.n+":", e.message);
+      errors.push(`Tag ${d.n}: ${e.message}`);
+      // Notlösung: gestrichelte Luftlinie zwischen den Stopps
+      drawLine(d.n, d.stops.map(id=>({lat:P[id].lat,lng:P[id].lng})), d.mode==="WALK", true);
+    }
+  }));
+  if(errors.length){
+    msg(`<b>Straßenroute nicht verfügbar</b>, gezeigt wird eine Luftlinie.<br>${errors[0]}<br><span style="opacity:.8">Häufige Ursache: Routes API nicht freigeschaltet oder mit dem Demo-Schlüssel nicht erlaubt.</span>`);
+  }
+  const drive = Object.entries(routeInfo).filter(([n])=>DAYS[n-1].mode==="DRIVE");
+  if(drive.length){
+    const s=drive.reduce((a,[,r])=>a+r.s,0), m=drive.reduce((a,[,r])=>a+r.m,0);
+    $("stat-drive").textContent = `🚗 ${fmtDur(s)} · ${fmtKm(m)}`;
+  } else $("stat-drive").textContent = "≈ 12–13 h Fahrt";
+  refresh(); renderList();
+}
+
+
+/* =========================================================
+   6) Anzeige aktualisieren
+   ========================================================= */
+function refresh(){
+  if(!map) return;
+  PLACES.forEach(p=>{
+    const mk=markers[p.id]; if(!mk) return;
+    mk.marker.map = catOn[p.cat] ? map : null;
+    mk.el.classList.toggle("faded", !!curDay && !p.days.includes(curDay));
+    mk.el.classList.toggle("sel", p.id===selId);
+    mk.marker.zIndex = p.id===selId ? 1000 : (curDay && p.days.includes(curDay) ? 100 : 10);
+  });
+  Object.entries(lines).forEach(([n,l])=>{
+    const dim = curDay && +n!==curDay;
+    const col = dim? "#9aa0a6" : "#1a73e8";
+    const z = dim? 1 : 3;
+    if(l.line.get("icons")){
+      const ic=l.line.get("icons"); ic[0].icon.strokeColor=col; if(ic[0].icon.fillColor) ic[0].icon.fillColor=col;
+      l.line.setOptions({icons:ic, zIndex:z+1});
+    } else {
+      l.line.setOptions({strokeColor:col, strokeOpacity:dim?.55:1, zIndex:z+1});
+    }
+    l.casing.setOptions({strokeOpacity: l.walk? 0 : (dim?.4:1), zIndex:z});
+  });
+}
+
+// Filter-Chips
+function renderChips(){
+  $("chips").innerHTML = Object.entries(CAT).map(([k,c])=>
+    `<button class="chip${catOn[k]?"":" off"}" data-k="${k}"><span class="c" style="background:${c.color}"></span>${c.name}</button>`).join("");
+  $("chips").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{ catOn[b.dataset.k]=!catOn[b.dataset.k]; renderChips(); renderList(); refresh(); });
+}
+
+// Reiter pro Tag
+function renderTabs(){
+  const data=[{n:0,label:"Alle"}].concat(DAYS);
+  $("tabs").innerHTML = data.map(d=>`<button class="tab${d.n===curDay?" on":""}" data-n="${d.n}">${d.label}</button>`).join("");
+  $("tabs").querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
+    curDay=+b.dataset.n; selId=null; hideCard(); renderTabs(); renderList(); refresh();
+    if(map) fitTo(curDay? dayPts(curDay) : allPts());
+  });
+}
+
+// Liste links
+function renderList(){
+  let h="";
+  const days = curDay? DAYS.filter(d=>d.n===curDay) : DAYS;
+  days.forEach(d=>{
+    const r=routeInfo[d.n];
+    let drv="";
+    if(r) drv = `<br><span class="drv">${d.mode==="WALK"?"🚶":"🚗"} ${fmtDur(r.s)} · ${fmtKm(r.m)}</span>`;
+    else if(d.stops) drv = `<br><span class="drv">${d.mode==="WALK"?"🚶 zu Fuß":"🚗 Route wird berechnet …"}</span>`;
+    h+=`<div class="day-sum"><b>${d.label}: ${d.title}</b><br>${d.sum}${drv}</div>`;
+
+    // Tagesansicht: Stopps in Fahrtreihenfolge mit Etappen dazwischen, danach der Rest
+    let items;
+    if(curDay){
+      const order = d.stops||[];
+      const rest = PLACES.filter(p=>p.days.includes(d.n) && !order.includes(p.id));
+      items = order.map(id=>P[id]).concat(rest);
+    } else {
+      items = PLACES.filter(p=>p.days[0]===d.n);
+    }
+    items.forEach((p,i)=>{
+      if(!catOn[p.cat]) return;
+      const c=CAT[p.cat];
+      h+=`<div class="item${p.id===selId?" sel":""}" data-id="${p.id}"><div class="dot" style="background:${c.color}">${c.icon==="P"?"<b>P</b>":c.icon}</div><div><div class="t">${p.name}${p.cost?`<span class="badge ${p.cls}">${p.cost}</span>`:""}</div><div class="s">${c.name} · ${p.note}</div></div></div>`;
+      if(curDay && d.stops && i < d.stops.length-1 && r && r.legs[i]){
+        h+=`<div class="leg">${d.mode==="WALK"?"🚶":"🚗"} ${fmtDur(r.legs[i].s)} · ${fmtKm(r.legs[i].m)}</div>`;
+      }
+    });
+  });
+  $("list").innerHTML=h;
+  $("list").querySelectorAll(".item").forEach(el=>el.onclick=()=>select(el.dataset.id,false));
+}
+
+// Infokarte
+function select(id, fromMap){
+  selId=id; const p=P[id], c=CAT[p.cat];
+  renderList(); refresh();
+  const li=document.querySelector(`.item[data-id="${id}"]`); if(li && fromMap) li.scrollIntoView({block:"nearest"});
+  const card=$("card");
+  card.innerHTML=`<div class="hd" style="background:${c.color}"><div class="k">${c.name}</div><div class="n">${p.name}</div></div>
+    <button class="x" aria-label="Schließen">×</button>
+    <div class="bd">
+      <div class="row"><span>Tag</span><span>${p.days.map(n=>"Tag "+n).join(", ")}</span></div>
+      ${p.cost?`<div class="row"><span>Kosten</span><span><span class="badge ${p.cls}" style="margin:0">${p.cost}</span></span></div>`:""}
+      <div class="row"><span>Notiz</span><span>${p.note}</span></div>
+      <div class="acts"><button data-a="nav">Navigation</button><button data-a="del">Entfernen</button></div>
+    </div>`;
+  card.style.display="block";
+  card.querySelector(".x").onclick=()=>{ selId=null; hideCard(); renderList(); refresh(); };
+  card.querySelector('[data-a="nav"]').onclick=()=>{
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`, "_blank");
+  };
+  card.querySelector('[data-a="del"]').onclick=()=>toast("Kommt in Phase 2: Die KI schlägt hier 2–3 Alternativen in der Nähe vor, die sich zeitlich ausgehen.");
+  if(!fromMap && map) fitTo([{lat:p.lat,lng:p.lng}]);
+}
+function hideCard(){ $("card").style.display="none"; }
+
+
+/* =========================================================
+   7) Bedienelemente
+   ========================================================= */
+$("zin").onclick = ()=> map && map.setZoom(map.getZoom()+1);
+$("zout").onclick= ()=> map && map.setZoom(map.getZoom()-1);
+$("zfit").onclick= ()=>{ curDay=0; selId=null; hideCard(); renderTabs(); renderList(); refresh(); if(map) fitTo(allPts()); };
+const togglePanel = ()=>{ if(mobile()) $("panel").classList.toggle("min"); };
+$("grab").onclick = togglePanel;
+$("head").onclick = togglePanel;
+
+renderChips();
+init().catch(e=>{
+  console.error(e);
+  msg("<b>Karte konnte nicht geladen werden.</b> "+e.message);
+  renderTabs(); renderList();
+});
+</script>
+</body>
+</html>
