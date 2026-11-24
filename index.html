@@ -28,6 +28,7 @@ html,body{margin:0;height:100%;font-family:Roboto,Arial,sans-serif;color:#202124
 .pinw{position:relative;width:30px;height:36px;cursor:pointer;transform-origin:50% 100%;transition:transform .15s,opacity .15s}
 .pinw .pin{position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--c);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);display:grid;place-items:center}
 .pinw .pin span{transform:rotate(45deg);font-size:14px;line-height:1;color:#fff;font-weight:700}
+.pinw.park{transform:scale(.75)}
 .pinw.sel{transform:scale(1.3)}
 .pinw.faded{opacity:.3}
 
@@ -149,7 +150,7 @@ html,body{margin:0;height:100%;font-family:Roboto,Arial,sans-serif;color:#202124
    1) HIER DEN EIGENEN GOOGLE-MAPS-SCHLÜSSEL EINTRAGEN
    (zwischen die Anführungszeichen, nicht im Chat schicken)
    ========================================================= */
-const API_KEY = "AIzaSyBgC7hMIACWRAFK0mjpeaVhzQk9yU9nkk4";
+const API_KEY = "DEIN_SCHLUESSEL";
 
 
 /* =========================================================
@@ -290,7 +291,7 @@ async function init(){
   PLACES.forEach(p=>{
     const c=CAT[p.cat];
     const el=document.createElement("div");
-    el.className="pinw"; el.style.setProperty("--c",c.color);
+    el.className="pinw"+(p.cat==="park"?" park":""); el.style.setProperty("--c",c.color);
     el.innerHTML=`<div class="pin"><span>${c.icon}</span></div>`;
     el.title=p.name;
     const marker = new AdvancedMarkerElement({map, position:{lat:p.lat,lng:p.lng}, content:el, title:p.name});
@@ -389,7 +390,9 @@ function refresh(){
     mk.marker.map = catOn[p.cat] ? map : null;
     mk.el.classList.toggle("faded", !!curDay && !p.days.includes(curDay));
     mk.el.classList.toggle("sel", p.id===selId);
-    mk.marker.zIndex = p.id===selId ? 1000 : (curDay && p.days.includes(curDay) ? 100 : 10);
+    // Parkplätze liegen unter den anderen Pins, damit sie Orte nicht verdecken
+    const base = p.cat==="park" ? 1 : 10;
+    mk.marker.zIndex = p.id===selId ? 1000 : (curDay && p.days.includes(curDay) ? 100+base : base);
   });
   Object.entries(lines).forEach(([n,l])=>{
     const dim = curDay && +n!==curDay;
